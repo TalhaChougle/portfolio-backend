@@ -38,12 +38,19 @@ def fetch_github_repo(github_url: str) -> dict:
         raise ValueError("Not a valid GitHub URL")
     owner, repo = m.group(1), m.group(2).rstrip(".git")
 
-    repo_res = requests.get(f"https://api.github.com/repos/{owner}/{repo}", timeout=10)
+    headers = {}
+    gh_token = os.environ.get("GITHUB_TOKEN")
+    if gh_token:
+        headers["Authorization"] = f"Bearer {gh_token}"
+
+    repo_res = requests.get(f"https://api.github.com/repos/{owner}/{repo}", headers=headers, timeout=10)
+    if repo_res.status_code == 403:
+        raise ValueError("GitHub rate limit hit — add a GITHUB_TOKEN env var to raise the limit")
     if repo_res.status_code != 200:
         raise ValueError("Repository not found or private")
     repo_data = repo_res.json()
 
-    langs_res = requests.get(f"https://api.github.com/repos/{owner}/{repo}/languages", timeout=10)
+    langs_res = requests.get(f"https://api.github.com/repos/{owner}/{repo}/languages", headers=headers, timeout=10)
     languages = list(langs_res.json().keys()) if langs_res.status_code == 200 else []
 
     return {
