@@ -24,6 +24,34 @@ class Certification(Base):
     modules = Column(ARRAY(String), default=list)
 
 
+class Resume(Base):
+    __tablename__ = "resume"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_url = Column(String, default="")
+    media_type = Column(String, default="")
+
+
+class LabReport(Base):
+    __tablename__ = "lab_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, default="")
+    file_url = Column(String, default="")
+    media_type = Column(String, default="")
+
+
+class Publication(Base):
+    __tablename__ = "publications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, default="")
+    file_url = Column(String, default="")
+    media_type = Column(String, default="")
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 
