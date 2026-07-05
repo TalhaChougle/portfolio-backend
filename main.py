@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from models import init_db, get_db, Certification, Resume, LabReport, Publication
 from schemas import CertificationOut, ResumeOut, DocOut
+from pydantic import BaseModel
 import storage
+import autofill
 
 app = FastAPI(title="Portfolio Backend")
 
@@ -228,3 +230,40 @@ def _make_doc_routes(model, prefix: str):
 
 _make_doc_routes(LabReport, "lab-reports")
 _make_doc_routes(Publication, "publications")
+
+
+class GithubUrlRequest(BaseModel):
+    github_url: str
+
+
+@app.post("/extract/project")
+def extract_project(req: GithubUrlRequest):
+    try:
+        repo = autofill.fetch_github_repo(req.github_url)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    description = autofill.rewrite_project_description(
+        repo["raw_description"], repo["languages"], repo["topics"]
+    )
+    return {"name": repo["name"], "description": description, "tech_stack": repo["languages"]}
+
+
+@app.post("/extract/cert")
+def extract_cert(file: UploadFile = File(...)):
+    content = file.file.read()
+    is_pdf = file.content_type == "application/pdf" or file.filename.lower().endswith(".pdf")
+    if is_pdf:
+        pages = autofill.extract_pdf_page_texts(content)
+        if len(pages) <= 1:
+            text = pages[0] if pages else ""
+            return autofill.extract_cert_info(text)
+        return {"multi": True, "results": autofill.extract_multi_cert_info(pages)}
+    # images: no OCR configured, return empty so the field stays manual
+    return {"date": "", "description": ""}
+
+
+@app.post("/extract/document")
+def extract_document(file: UploadFile = File(...)):
+    content = file.file.read()
+    text = autofill.extract_text_from_file(content, file.content_type, file.filename)
+    return {"description": autofill.extract_doc_description(text)}
