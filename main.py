@@ -4,8 +4,8 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from models import init_db, get_db, Certification
-from schemas import CertificationOut
+from models import init_db, get_db, Certification, Resume, LabReport, Publication
+from schemas import CertificationOut, ResumeOut, DocOut
 import storage
 
 app = FastAPI(title="Portfolio Backend")
@@ -119,3 +119,112 @@ def delete_all_certifications(db: Session = Depends(get_db)):
     db.query(Certification).delete()
     db.commit()
     return {"ok": True}
+
+
+@app.get("/resume", response_model=Optional[ResumeOut])
+def get_resume(db: Session = Depends(get_db)):
+    return db.query(Resume).first()
+
+
+@app.post("/resume", response_model=ResumeOut)
+def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    existing = db.query(Resume).first()
+    if existing:
+        storage.delete_file(existing.file_url)
+
+    content = file.file.read()
+    file_url = storage.upload_file(content, file.filename, file.content_type)
+    media_type = "pdf" if file.content_type == "application/pdf" else "image"
+
+    if existing:
+        existing.file_url = file_url
+        existing.media_type = media_type
+        db.commit()
+        db.refresh(existing)
+        return existing
+    else:
+        r = Resume(file_url=file_url, media_type=media_type)
+        db.add(r)
+        db.commit()
+        db.refresh(r)
+        return r
+
+
+@app.delete("/resume")
+def delete_resume(db: Session = Depends(get_db)):
+    existing = db.query(Resume).first()
+    if existing:
+        storage.delete_file(existing.file_url)
+        db.delete(existing)
+        db.commit()
+    return {"ok": True}
+
+
+def _make_doc_routes(model, prefix: str):
+    @app.get(f"/{prefix}", response_model=List[DocOut])
+    def list_docs(db: Session = Depends(get_db)):
+        return db.query(model).order_by(model.id).all()
+
+    @app.post(f"/{prefix}", response_model=DocOut)
+    def create_doc(
+        title: str = Form(...),
+        description: str = Form(""),
+        file: Optional[UploadFile] = File(None),
+        db: Session = Depends(get_db),
+    ):
+        file_url = ""
+        media_type = ""
+        if file:
+            content = file.file.read()
+            file_url = storage.upload_file(content, file.filename, file.content_type)
+            media_type = file.content_type or ""
+        item = model(title=title, description=description, file_url=file_url, media_type=media_type)
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+        return item
+
+    @app.put(f"/{prefix}/{{item_id}}", response_model=DocOut)
+    def update_doc(
+        item_id: int,
+        title: str = Form(...),
+        description: str = Form(""),
+        file: Optional[UploadFile] = File(None),
+        db: Session = Depends(get_db),
+    ):
+        item = db.query(model).get(item_id)
+        if not item:
+            raise HTTPException(404, "Not found")
+        if file:
+            storage.delete_file(item.file_url)
+            content = file.file.read()
+            item.file_url = storage.upload_file(content, file.filename, file.content_type)
+            item.media_type = file.content_type or ""
+        item.title = title
+        item.description = description
+        db.commit()
+        db.refresh(item)
+        return item
+
+    @app.delete(f"/{prefix}/{{item_id}}")
+    def delete_doc(item_id: int, db: Session = Depends(get_db)):
+        item = db.query(model).get(item_id)
+        if not item:
+            raise HTTPException(404, "Not found")
+        storage.delete_file(item.file_url)
+        db.delete(item)
+        db.commit()
+        return {"ok": True}
+
+    @app.delete(f"/{prefix}")
+    def delete_all_docs(db: Session = Depends(get_db)):
+        items = db.query(model).all()
+        for i in items:
+            storage.delete_file(i.file_url)
+        db.query(model).delete()
+        db.commit()
+        return {"ok": True}
+
+
+_make_doc_routes(LabReport, "lab-reports")
+_make_doc_routes(Publication, "publications")
