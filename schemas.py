@@ -46,3 +46,18 @@ class DocOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ProjectOut(BaseModel):
+    id: int
+    title: str
+    description: str
+    long_description: str
+    category: str
+    github: str
+    link: str
+    tech_stack: List[str]
+    highlights: List[str]
+
+    class Config:
+        from_attributes = True
