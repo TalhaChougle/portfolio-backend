@@ -52,6 +52,20 @@ class Publication(Base):
     media_type = Column(String, default="")
 
 
+class Project(Base):
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, default="")
+    long_description = Column(Text, default="")
+    category = Column(String, default="")
+    github = Column(String, default="")
+    link = Column(String, default="")
+    tech_stack = Column(ARRAY(String), default=list)
+    highlights = Column(ARRAY(String), default=list)
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 
