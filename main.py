@@ -4,8 +4,8 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from models import init_db, get_db, Certification, Resume, LabReport, Publication
-from schemas import CertificationOut, ResumeOut, DocOut
+from models import init_db, get_db, Certification, Resume, LabReport, Publication, Project
+from schemas import CertificationOut, ResumeOut, DocOut, ProjectOut
 from pydantic import BaseModel
 import storage
 import autofill
@@ -230,6 +230,60 @@ def _make_doc_routes(model, prefix: str):
 
 _make_doc_routes(LabReport, "lab-reports")
 _make_doc_routes(Publication, "publications")
+
+
+class ProjectIn(BaseModel):
+    title: str
+    description: str = ""
+    long_description: str = ""
+    category: str = ""
+    github: str = ""
+    link: str = ""
+    tech_stack: List[str] = []
+    highlights: List[str] = []
+
+
+@app.get("/projects", response_model=List[ProjectOut])
+def list_projects(db: Session = Depends(get_db)):
+    return db.query(Project).order_by(Project.id).all()
+
+
+@app.post("/projects", response_model=ProjectOut)
+def create_project(body: ProjectIn, db: Session = Depends(get_db)):
+    p = Project(**body.dict())
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return p
+
+
+@app.put("/projects/{project_id}", response_model=ProjectOut)
+def update_project(project_id: int, body: ProjectIn, db: Session = Depends(get_db)):
+    p = db.query(Project).get(project_id)
+    if not p:
+        raise HTTPException(404, "Not found")
+    for k, v in body.dict().items():
+        setattr(p, k, v)
+    db.commit()
+    db.refresh(p)
+    return p
+
+
+@app.delete("/projects/{project_id}")
+def delete_project(project_id: int, db: Session = Depends(get_db)):
+    p = db.query(Project).get(project_id)
+    if not p:
+        raise HTTPException(404, "Not found")
+    db.delete(p)
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/projects")
+def delete_all_projects(db: Session = Depends(get_db)):
+    db.query(Project).delete()
+    db.commit()
+    return {"ok": True}
 
 
 class GithubUrlRequest(BaseModel):
